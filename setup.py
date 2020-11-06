@@ -18,10 +18,18 @@ class numpy_include(object):
         return numpy.get_include()
 
 
+with open('README.rst') as fp:
+    long_description = fp.read()
+
+
 setup(
     name='cyfunc',
     version='0.1',
     packages=find_packages(),
+    long_description_content_type="text/x-rst",
+    long_description=long_description,
+    author='Till Hoffmann',
+    url='https://github.com/tillahoffmann/cyfunc',
     setup_requires=[
         'numpy',
     ],
