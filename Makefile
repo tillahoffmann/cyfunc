@@ -1,6 +1,8 @@
 .PHONY : build clean gh-action lint sync tests
 
 build : lint tests
+	python setup.py sdist
+	twine check dist/*.tar.gz
 
 lint :
 	flake8
