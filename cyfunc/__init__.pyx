@@ -1,10 +1,52 @@
 from cpython cimport mem
 cimport numpy as np
-from ._util cimport fptr, Signature
-
+from ._util cimport fptr
 
 np.import_array()
 np.import_ufunc()
+
+
+cdef struct Signature:  #  Signature struct passed to the ufunc loop function.
+    fptr func;  # Pointer to the function to evaluate.
+    int num_args;  # Number of arguments.
+    void* data;  # Any additional information to pass to the elementwise function.
+
+
+CYFUNCS = {}  # Container for registered cyfuncs
+
+
+cdef register_cyfunc(name, docstring, signatures):
+    """
+    Register a cython implementation of a universal function.
+
+    Parameters
+    ----------
+    name : str
+        The name for the ufunc. Specifying a name of `add` or `multiply` enables a special behavior
+        for integer-typed reductions when no dtype is given. If the input type is an integer (or
+        boolean) data type smaller than the size of the numpy.int_ data type, it will be internally
+        upcast to the numpy.int_ (or numpy.uint) data type.
+    docstring : str
+        Allows passing in a documentation string to be stored with the ufunc. The documentation
+        string should not contain the name of the function or the calling signature as that will be
+        dynamically determined from the object and available when accessing the __doc__ attribute of
+        the ufunc.
+    signatures : list[dict]
+        Sequence of signatures for the ufunc, one for each dtype combination.
+
+    Returns
+    -------
+    ufunc : callable
+        A universal function.
+
+    Notes
+    -----
+    See https://numpy.org/doc/stable/reference/c-api/ufunc.html for details.
+    """
+    cyfunc = Cyfunc(name, docstring, signatures)
+    ufunc = cyfunc.ufunc
+    CYFUNCS[ufunc] = cyfunc
+    return ufunc
 
 
 cdef create_signature(inputs, outputs, fptr func, void* data):
@@ -83,27 +125,17 @@ cdef inline void set_value(char** args, int i, cython.numeric value) nogil:
 
 cdef class Cyfunc:
     """
-    A cython implementation of ufuncs.
-
-    Parameters
-    ----------
-    name : str
-        The name for the ufunc. Specifying a name of `add` or `multiply` enables a special behavior
-        for integer-typed reductions when no dtype is given. If the input type is an integer (or
-        boolean) data type smaller than the size of the numpy.int_ data type, it will be internally
-        upcast to the numpy.int_ (or numpy.uint) data type.
-    docstring : str
-        Allows passing in a documentation string to be stored with the ufunc. The documentation
-        string should not contain the name of the function or the calling signature as that will be
-        dynamically determined from the object and available when accessing the __doc__ attribute of
-        the ufunc.
-    signatures : list[dict]
-        Sequence of signatures for the ufunc, one for each dtype combination.
-
-    Notes
-    -----
-    See https://numpy.org/doc/stable/reference/c-api/ufunc.html for details.
+    A container to keep track of the memory associated with a universal function. See
+    `register_cyfunc` for details.
     """
+    cdef:
+        char* types
+        Signature* signatures
+        Signature** signature_ptr
+        int num_types, num_inputs, num_outputs, num_args
+        bytes name, docstring
+        object _ufunc
+
     def __init__(self, name, docstring, signatures):
         # Validate the signatures so we can allocate memory.
         self.num_inputs = self.num_outputs = -1
@@ -123,22 +155,20 @@ cdef class Cyfunc:
         # Allocate the memory.
         self.num_types = len(signatures)
         self.num_args = num_inputs + num_outputs
-        self.data = <Signature*>mem.PyMem_Malloc(self.num_types * sizeof(Signature))
-        self.data_ptr = <Signature**>mem.PyMem_Malloc(self.num_types * sizeof(Signature*))
-        # Allocate zero-terminated string of data types.
-        self.types = <char*>mem.PyMem_Malloc((self.num_types * self.num_args + 1) * sizeof(char))
-        self.types[self.num_types * self.num_args] = 0x00
+        self.signatures = <Signature*>mem.PyMem_Malloc(self.num_types * sizeof(Signature))
+        self.signature_ptr = <Signature**>mem.PyMem_Malloc(self.num_types * sizeof(Signature*))
+        self.types = <char*>mem.PyMem_Malloc(self.num_types * self.num_args * sizeof(char))
 
         # Fill the allocated memory.
         i = 0
         for j, signature in enumerate(signatures):
-            self.data[j].num_args = self.num_args
-            self.data[j].func = <fptr><long>signature['func']
+            self.signatures[j].num_args = self.num_args
+            self.signatures[j].func = <fptr><long>signature['func']
             if 'data' in signature:
-                self.data[j].data = <void*><long>signature['data']
+                self.signatures[j].data = <void*><long>signature['data']
             else:
-                self.data[j].data = <void*>0
-            self.data_ptr[j] = &self.data[j]
+                self.signatures[j].data = <void*>0
+            self.signature_ptr[j] = &self.signatures[j]
 
             for input_type in signature['inputs']:
                 self.types[i] = input_type
@@ -150,26 +180,23 @@ cdef class Cyfunc:
         # Generate the ufunc.
         self.name = name.encode()
         self.docstring = docstring.encode()
-        self._func = np.PyUFunc_FromFuncAndData(
+        self._ufunc = np.PyUFunc_FromFuncAndData(
             <np.PyUFuncGenericFunction*>&self.loop,
-            <void**>self.data_ptr,
+            <void**>self.signature_ptr,
             self.types,
-            self.num_types, # number of supported input types
-            self.num_inputs, # number of input args
-            self.num_outputs, # number of output args
-            0, # `identity` element, never mind this
-            self.name, # function name
-            self.docstring, # docstring
-            0 # unused
+            self.num_types,
+            self.num_inputs,
+            self.num_outputs,
+            0,  # Identity element
+            self.name,
+            self.docstring,
+            0 # Unused
         )
 
     def __dealloc__(self):
         mem.PyMem_Free(self.types)
-        mem.PyMem_Free(self.data)
-        mem.PyMem_Free(self.data_ptr)
-
-    def __call__(self, *args, **kwargs):
-        return self._func(*args, **kwargs)
+        mem.PyMem_Free(self.signatures)
+        mem.PyMem_Free(self.signature_ptr)
 
     def __str__(self):
         lines = [
@@ -183,15 +210,19 @@ cdef class Cyfunc:
         for i in range(self.num_types):
             lines.extend([
                 f'signature #{i}',
-                f'data address: {<long>self.data_ptr[i]}',
-                f'func: {<long>self.data_ptr[i].func}',
-                f'num_args: {self.data_ptr[i].num_args}',
-                f'data: {<long>self.data_ptr[i].data}',
+                f'signature address: {<long>self.signature_ptr[i]}',
+                f'func: {<long>self.signature_ptr[i].func}',
+                f'num_args: {self.signature_ptr[i].num_args}',
+                f'data: {<long>self.signature_ptr[i].data}',
             ])
         return '\n'.join(lines)
 
-    def get_ufunc(self):
-        return self._func
+    @property
+    def ufunc(self):
+        """
+        Return the associated ufunc.
+        """
+        return self._ufunc
 
     @staticmethod
     cdef void loop(char **args, np.npy_intp *dimensions, np.npy_intp *steps, void *data):
@@ -215,10 +246,10 @@ cdef class Cyfunc:
         cdef:
             int i, j
             int n = dimensions[0]
-            Signature* cyfunc_data = <Signature*>data;
+            Signature* signature = <Signature*>data;
 
         # Iterate over the dimensions and apply the function
         for i in range(n):
-            cyfunc_data.func(args, cyfunc_data.data)
-            for j in range(cyfunc_data.num_args):
+            signature.func(args, signature.data)
+            for j in range(signature.num_args):
                 args[j] += steps[j]

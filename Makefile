@@ -1,15 +1,22 @@
+.PHONY : build clean gh-action sync tests
+
+build : tests
+
+tests :
+	# Step into the test directory to make sure we don't accidentally import directly from cyfunc.
+	cd tests && pytest -v
+
 sync : requirements.txt
 	pip-sync
 
-requirements.txt : setup.py requirements.in
+requirements.txt : requirements.in setup.py
 	pip-compile -v
 
 clean :
 	rm -rf build *.egg-info
 	rm -f cyfunc/*.c cyfunc/*.so
-
-tests : clean
-	# Ensure any changes are picked up
-	pip install -e .
 	touch tests/*.pyx
-	pytest -v
+
+# Build the repository using a GitHub action for local debugging (cf. https://github.com/nektos/act).
+gh-action :
+	act -P ubuntu-latest=nektos/act-environments-ubuntu:18.04
