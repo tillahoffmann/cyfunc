@@ -3,6 +3,8 @@
 build : lint tests
 	python setup.py sdist
 	twine check dist/*.tar.gz
+	# Check that we can install the packaged version.
+	pip install dist/*.tar.gz
 
 lint :
 	flake8
@@ -18,7 +20,7 @@ requirements.txt : requirements.in setup.py
 	pip-compile -v
 
 clean :
-	rm -rf build *.egg-info
+	rm -rf build *.egg-info dist
 	rm -f cyfunc/*.c cyfunc/*.so
 	touch tests/*.pyx
 

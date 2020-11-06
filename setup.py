@@ -24,7 +24,7 @@ with open('README.rst') as fp:
 
 setup(
     name='cyfunc',
-    version='0.1',
+    version='0.1.1',
     packages=find_packages(),
     long_description_content_type="text/x-rst",
     long_description=long_description,
@@ -50,8 +50,8 @@ setup(
     package_data={
         'cyfunc': [
             '*.pxd',
+            '*.pyx',
         ],
     },
-    include_package_data=True,
     zip_safe=False,
 )
