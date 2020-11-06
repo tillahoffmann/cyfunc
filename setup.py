@@ -24,7 +24,7 @@ with open('README.rst') as fp:
 
 setup(
     name='cyfunc',
-    version='0.1.3',
+    version='0.1.4',
     packages=find_packages(),
     long_description_content_type="text/x-rst",
     long_description=long_description,

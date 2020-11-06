@@ -10,6 +10,8 @@ lint :
 	flake8
 
 tests :
+	# Touch cython files to ensure they get recompiled.
+	touch tests/*.pyx
 	# Step into the test directory to make sure we don't accidentally import directly from cyfunc.
 	cd tests && pytest -v
 
@@ -22,7 +24,6 @@ requirements.txt : requirements.in setup.py
 clean :
 	rm -rf build *.egg-info dist
 	rm -f cyfunc/*.c cyfunc/*.so
-	touch tests/*.pyx
 
 # Build the repository using a GitHub action for local debugging (cf. https://github.com/nektos/act).
 gh-action :
