@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 import pyximport
 pyximport.install(setup_args={'include_dirs': np.get_include()}, language_level=3)
 import _test_cyfunc  # noqa: E402
@@ -25,16 +26,16 @@ def test_evaluation_out():
     np.testing.assert_allclose(actual, x * y)
 
 
-def test_evaluation_where():
-    n = 6
+@pytest.mark.parametrize('n', [15, 23, 40])
+def test_evaluation_where(n):
     x = 1.0 + np.arange(n)
     y = 2
     where = np.arange(n) % 2 == 0
 
-    actual = -np.ones(n)
-    multiply(x, y, out=actual, where=where)
-
     desired = -np.ones(n)
     np.multiply(x, y, out=desired, where=where)
+
+    actual = -np.ones(n)
+    multiply(x, y, out=actual, where=where)
 
     np.testing.assert_allclose(actual, desired)

@@ -141,7 +141,7 @@ cdef class Cyfunc:
         bytes name, docstring
         object _ufunc
 
-    def __init__(self, name, docstring, signatures, *, debug=False):
+    def __cinit__(self, name, docstring, signatures, *, debug=False):
         # Validate the signatures so we can allocate memory.
         self.num_inputs = self.num_outputs = -1
         for signature in signatures:
@@ -172,7 +172,7 @@ cdef class Cyfunc:
             if 'data' in signature:
                 self.signatures[j].data = <void*><long>signature['data']
             else:
-                self.signatures[j].data = <void*>0
+                self.signatures[j].data = NULL
             self.signature_ptr[j] = &self.signatures[j]
 
             for input_type in signature['inputs']:
@@ -200,8 +200,9 @@ cdef class Cyfunc:
 
     def __dealloc__(self):
         mem.PyMem_Free(self.types)
-        mem.PyMem_Free(self.signatures)
         mem.PyMem_Free(self.signature_ptr)
+        mem.PyMem_Free(self.signatures)
+        self.types = self.signatures = self.signature_ptr = NULL
 
     def __str__(self):
         lines = [
@@ -253,6 +254,9 @@ cdef class Cyfunc:
             int n = dimensions[0]
             Signature* signature = <Signature*>data;
 
+        if n == 0:
+            return
+
         # Iterate over the dimensions and apply the function. We use the somewhat unconvential
         # calling order to ensure we don't "over advance" the pointer to the data.
         signature.func(args, signature.data)
@@ -288,6 +292,7 @@ cdef class Cyfunc:
                 printf("%f ", get_value[double](args, j, 0))
 
             if i == n - 1:  # don't advance the pointer on the last loop
+                printf("\n\n")
                 break
 
             printf("\nsteps: ")
