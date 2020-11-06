@@ -10,6 +10,10 @@ cdef void multiply_d(char** args, void* data):
     cyfunc.set_value(args, 2, x * y)
 
 
+signature = cyfunc.create_signature([float, float], [float], multiply_d, <void*>0)
+multiply = cyfunc.register_cyfunc("multiply", "multiply two numbers", [signature])
+
+
 def test_create_signature():
     signature = cyfunc.create_signature([float, float], [float], multiply_d, <void*>0)
     print(signature)
@@ -19,13 +23,3 @@ def test_create_signature():
         'func': <long>multiply_d,
         'data': 0,
     }
-
-
-def test_evaluation():
-    signature = cyfunc.create_signature([float, float], [float], multiply_d, <void*>0)
-    multiply = cyfunc.register_cyfunc("multiply", "multiply two numbers", [signature])
-    x = np.arange(3)
-    y = np.pi
-    desired = x * y
-    actual = multiply(x, y)
-    np.testing.assert_allclose(actual, desired)
