@@ -11,7 +11,7 @@ except ImportError:
 
 class numpy_include(object):
     """
-    Lazily evaluate numpy include path because numpy may not be installed .
+    Lazily evaluate numpy include path because numpy may not be installed.
     """
     def __str__(self):
         import numpy

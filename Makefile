@@ -1,6 +1,9 @@
-.PHONY : build clean gh-action sync tests
+.PHONY : build clean gh-action lint sync tests
 
-build : tests
+build : lint tests
+
+lint :
+	flake8
 
 tests :
 	# Step into the test directory to make sure we don't accidentally import directly from cyfunc.
