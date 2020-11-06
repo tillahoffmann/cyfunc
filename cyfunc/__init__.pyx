@@ -1,5 +1,6 @@
 from cpython cimport mem
 from libc.stdio cimport printf
+from libc cimport stdlib
 cimport numpy as np
 from ._util cimport fptr
 
@@ -16,7 +17,7 @@ cdef struct Signature:  #  Signature struct passed to the ufunc loop function.
 CYFUNCS = {}  # Container for registered cyfuncs
 
 
-cdef register_cyfunc_with_debug(name, docstring, signatures, debug):
+cdef register_cyfunc(name, docstring, signatures):
     """
     Register a cython implementation of a universal function.
 
@@ -44,14 +45,10 @@ cdef register_cyfunc_with_debug(name, docstring, signatures, debug):
     -----
     See https://numpy.org/doc/stable/reference/c-api/ufunc.html for details.
     """
-    cyfunc = Cyfunc(name, docstring, signatures, debug=debug)
+    cyfunc = Cyfunc(name, docstring, signatures)
     ufunc = cyfunc.ufunc
     CYFUNCS[ufunc] = cyfunc
     return ufunc
-
-
-cdef register_cyfunc(name, docstring, signatures):
-    return register_cyfunc_with_debug(name, docstring, signatures, False)
 
 
 cdef create_signature(inputs, outputs, fptr func, void* data):
@@ -141,7 +138,7 @@ cdef class Cyfunc:
         bytes name, docstring
         object _ufunc
 
-    def __cinit__(self, name, docstring, signatures, *, debug=False):
+    def __cinit__(self, name, docstring, signatures):
         # Validate the signatures so we can allocate memory.
         self.num_inputs = self.num_outputs = -1
         for signature in signatures:
@@ -186,7 +183,7 @@ cdef class Cyfunc:
         self.name = name.encode()
         self.docstring = docstring.encode()
         self._ufunc = np.PyUFunc_FromFuncAndData(
-            <np.PyUFuncGenericFunction*>(&self.debug_loop if debug else &self.loop),
+            <np.PyUFuncGenericFunction*>&self.loop,
             <void**>self.signature_ptr,
             self.types,
             self.num_types,
@@ -251,52 +248,31 @@ cdef class Cyfunc:
         """
         cdef:
             int i, j
-            int n = dimensions[0]
-            Signature* signature = <Signature*>data;
+            np.npy_intp n = dimensions[0]
+            Signature* signature = <Signature*>data
+            char** ptr
 
+        # Nothing to be done here.
         if n == 0:
             return
 
-        # Iterate over the dimensions and apply the function. We use the somewhat unconvential
-        # calling order to ensure we don't "over advance" the pointer to the data.
+        # Evaluate the function on the current pointer.
         signature.func(args, signature.data)
+
+        # Abort if there are no additional elements to evaluate.
+        if n == 1:
+            return
+
+        # Transfer the pointers so we don't mess with numpy's memory.
+        ptr = <char**>stdlib.malloc(signature.num_args * sizeof(char*))
+        for j in range(signature.num_args):
+            ptr[j] = args[j]
+
+        # Evaluate the remaining elements.
         for i in range(n - 1):
             for j in range(signature.num_args):
-                args[j] += steps[j]
-            signature.func(args, signature.data)
+                ptr[j] += steps[j]
+            signature.func(ptr, signature.data)
 
-    @staticmethod
-    cdef void debug_loop(char **args, np.npy_intp *dimensions, np.npy_intp *steps, void *data):
-        """
-        Same as `loop` but with extensive print statements.
-        """
-        cdef:
-            int i, j
-            np.npy_intp n = dimensions[0]
-            Signature* signature = <Signature*>data;
-
-        # Report on what the signature us
-        printf("#iterations: %ld\nfunc: %lu\nnum_args: %lu\n===========\n", n, signature.func,
-               signature.num_args)
-
-        # Iterate over the dimensions and apply the function
-        for i in range(n):
-            printf("iteration #%d\nargs: ", i)
-            for j in range(signature.num_args):
-                printf("%f ", get_value[double](args, j, 0))
-            printf("\napplying function...\nargs: ")
-
-            signature.func(args, signature.data)
-
-            for j in range(signature.num_args):
-                printf("%f ", get_value[double](args, j, 0))
-
-            if i == n - 1:  # don't advance the pointer on the last loop
-                printf("\n\n")
-                break
-
-            printf("\nsteps: ")
-            for j in range(signature.num_args):
-                printf("%d ", steps[j])
-                args[j] += steps[j]
-            printf("\n\n")
+        # Free up the memory.
+        stdlib.free(ptr)

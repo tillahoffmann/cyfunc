@@ -11,7 +11,7 @@ cdef void multiply_d(char** args, void* data):
 
 
 signature = cyfunc.create_signature([float, float], [float], multiply_d, NULL)
-multiply = cyfunc.register_cyfunc_with_debug("multiply", "multiply two numbers", [signature], False)
+multiply = cyfunc.register_cyfunc("multiply", "multiply two numbers", [signature])
 
 
 def test_create_signature():

@@ -26,16 +26,20 @@ def test_evaluation_out():
     np.testing.assert_allclose(actual, x * y)
 
 
-@pytest.mark.parametrize('n', [15, 23, 40])
-def test_evaluation_where(n):
-    x = 1.0 + np.arange(n)
-    y = 2
-    where = np.arange(n) % 2 == 0
+@pytest.mark.parametrize('shape1, shape2', [
+    [(3,), ()],
+    [(15,), ()],
+    [(15, 3), (3,)],
+    [(117, 5, 1), (5, 13)],
+])
+def test_evaluation_where(shape1, shape2):
+    x = 1.0 + np.arange(np.prod(shape1)).reshape(shape1)
+    y = 2 + np.arange(np.prod(shape2)).reshape(shape2)
+    desired = -np.ones_like(x + y)
+    actual = -np.ones_like(x + y)
+    where = np.random.uniform(size=shape1) < 0.5
 
-    desired = -np.ones(n)
     np.multiply(x, y, out=desired, where=where)
-
-    actual = -np.ones(n)
     multiply(x, y, out=actual, where=where)
 
     np.testing.assert_allclose(actual, desired)
