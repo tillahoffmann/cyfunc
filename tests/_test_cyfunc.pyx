@@ -23,7 +23,7 @@ def test_create_signature():
 
 def test_evaluation():
     signature = cyfunc.create_signature([float, float], [float], multiply_d, <void*>0)
-    multiply = cyfunc.Cyfunc("multiply", "multiply two numbers", [signature])
+    multiply = cyfunc.register_cyfunc("multiply", "multiply two numbers", [signature])
     x = np.arange(3)
     y = np.pi
     desired = x * y

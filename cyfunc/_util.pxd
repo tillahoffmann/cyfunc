@@ -1,9 +1,2 @@
-# Function pointer declaration for elementwise callable
+# Declare a common function pointer (cf. https://stackoverflow.com/a/64714921/1150961).
 ctypedef void (*fptr)(char**, void*)
-
-
-# Signature struct passed to the ufunc loop function
-cdef struct Signature:
-    fptr func;  # Pointer to the function to evaluate
-    int num_args;  # Number of arguments
-    void* data;  # Any additional information to pass to the elementwise function
