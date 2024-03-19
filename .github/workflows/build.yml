@@ -18,14 +18,19 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: [3.6, 3.7, 3.8]
+        python-version:
+        - "3.8"
+        - "3.9"
+        - "3.10"
+        - "3.11"
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v2
+      uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
+        cache: pip
     - name: Install dependencies
       run: pip install -r requirements.txt
     - name: Build docs, lint, and test
@@ -34,7 +39,7 @@ jobs:
       # Only publish with one python version
       # (cf. https://github.com/pypa/gh-action-pypi-publish/issues/16#issuecomment-557827529)
       if: >-
-        matrix.python-version == '3.8'
+        matrix.python-version == '3.10'
         && github.event_name == 'push'
         && startsWith(github.event.ref, 'refs/tags')
       uses: pypa/gh-action-pypi-publish@master
