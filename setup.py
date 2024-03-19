@@ -49,6 +49,7 @@ setup(
     ],
     package_data={
         'cyfunc': [
+            '*.c',
             '*.pxd',
             '*.pyx',
         ],
