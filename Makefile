@@ -22,7 +22,7 @@ requirements.txt : requirements.in setup.py
 	pip-compile -v
 
 clean :
-	rm -rf build *.egg-info dist
+	rm -rf build *.egg-info dist .eggs
 	rm -f cyfunc/*.c cyfunc/*.so
 
 # Build the repository using a GitHub action for local debugging (cf. https://github.com/nektos/act).
