@@ -31,6 +31,8 @@ jobs:
       with:
         python-version: ${{ matrix.python-version }}
         cache: pip
+    - name: Preinstall cython
+      run: pip install `cat requirements.txt | grep cython==`
     - name: Install dependencies
       run: pip install -r requirements.txt
     - name: Build docs, lint, and test
